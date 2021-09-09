@@ -1,0 +1,13 @@
+[package]
+name = "eterm_viewer"
+version = "0.0.1"
+edition = "2018"
+
+[dependencies]
+argh = "0.1.6"
+egui = "0.14"
+egui_glium = "0.14"
+eterm = { version = "0.0.1", path = "../eterm" }
+glium = "0.30"
+log = "0.4"
+simple_logger = "1.13"

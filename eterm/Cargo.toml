@@ -1,0 +1,18 @@
+[package]
+name = "eterm"
+version = "0.0.1"
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.43"
+bincode = "1.3"
+egui = { version = "0.14.2", features = ["persistence"] }
+itertools = "0.10"
+log = "0.4"
+parking_lot = "0.11"
+serde = { version = "1", features = ["derive"] }
+zstd = "0.9"
+
+[dev-dependencies]
+egui_demo_lib = "0.14"
+simple_logger = "1.13"

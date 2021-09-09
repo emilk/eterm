@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+members = [
+    "eterm",
+    "eterm_viewer",
+]
+
+[patch.crates-io]
+egui = { path = "../egui/egui" }
+egui_demo_lib = { path = "../egui/egui_demo_lib" }
+egui_glium = { path = "../egui/egui_glium" }
