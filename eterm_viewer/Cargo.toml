@@ -5,7 +5,7 @@ edition = "2018"
 
 [dependencies]
 argh = "0.1.6"
-egui = "0.14"
+egui = "0.14.2"
 egui_glium = "0.14"
 eterm = { version = "0.0.1", path = "../eterm" }
 glium = "0.30"
