@@ -6,7 +6,7 @@ use std::{
 use anyhow::Context as _;
 use egui::RawInput;
 
-use crate::ClientToServerMessage;
+use crate::{net_shape::ClippedNetShape, ClientToServerMessage};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ClientId(u64);
@@ -37,26 +37,26 @@ impl Server {
         })
     }
 
-    /// Call frequently (e.g. 60 times per second) with the ui you'd like to show to clients.
-    ///
-    /// # Errors
-    /// Underlying TCP errors.
-    pub fn show(&mut self, mut show: impl FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
-        self.show_dyn(&mut show)
-    }
-
     /// Send a new frame to each client at least this often.
     /// Default: one second.
     pub fn set_minimum_update_interval(&mut self, seconds: f32) {
         self.minimum_update_interval = seconds;
     }
 
-    fn show_dyn(&mut self, show: &mut dyn FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
+    /// Call frequently (e.g. 60 times per second) with the ui you'd like to show to clients.
+    ///
+    /// # Errors
+    /// Underlying TCP errors.
+    pub fn show(&mut self, mut do_ui: impl FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
+        self.show_dyn(&mut do_ui)
+    }
+
+    fn show_dyn(&mut self, do_ui: &mut dyn FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
         self.accept_new_clients()?;
         self.try_receive();
 
         for client in self.clients.values_mut() {
-            client.show(show, self.minimum_update_interval);
+            client.show(do_ui, self.minimum_update_interval);
         }
         Ok(())
     }
@@ -88,6 +88,7 @@ impl Server {
                             egui_ctx: Default::default(),
                             input: None,
                             last_update: None,
+                            last_visuals: Default::default(),
                         }
                     });
 
@@ -128,12 +129,18 @@ struct Client {
     /// Set when there is something to do. Cleared after painting.
     input: Option<egui::RawInput>,
     last_update: Option<std::time::Instant>,
+    last_visuals: Vec<ClippedNetShape>,
 }
 
 impl Client {
+    fn disconnect(&mut self) {
+        self.tcp_endpoint = None;
+        self.last_visuals = Default::default();
+    }
+
     fn show(
         &mut self,
-        show: &mut dyn FnMut(&egui::CtxRef, ClientId),
+        do_ui: &mut dyn FnMut(&egui::CtxRef, ClientId),
         minimum_update_interval: f32,
     ) {
         if self.tcp_endpoint.is_none() {
@@ -160,22 +167,30 @@ impl Client {
         // Ignore client time:
         input.time = Some(self.start_time.elapsed().as_secs_f64());
 
-        let frame_index = self.frame_index;
-        self.frame_index += 1;
         self.egui_ctx.begin_frame(input);
-        show(&self.egui_ctx, self.client_id);
-        let (output, clipped_shapes) = self.egui_ctx.end_frame();
-
-        let needs_repaint = output.needs_repaint;
+        do_ui(&self.egui_ctx, self.client_id);
+        let (mut output, clipped_shapes) = self.egui_ctx.end_frame();
 
         let clipped_net_shapes = crate::net_shape::to_clipped_net_shapes(clipped_shapes);
-        let message = crate::ServerToClientMessage::Frame {
-            frame_index,
-            output,
-            clipped_net_shapes,
-        };
 
-        self.send_message(&message);
+        let needs_repaint = output.needs_repaint;
+        output.needs_repaint = false; // so we can compare below
+
+        if output == Default::default() && clipped_net_shapes == self.last_visuals {
+            // No change - save bandwidth and send nothing
+        } else {
+            let frame_index = self.frame_index;
+            self.frame_index += 1;
+
+            let message = crate::ServerToClientMessage::Frame {
+                frame_index,
+                output,
+                clipped_net_shapes: clipped_net_shapes.clone(),
+            };
+
+            self.last_visuals = clipped_net_shapes;
+            self.send_message(&message);
+        }
 
         if needs_repaint {
             // eprintln!("frame {} painted, needs_repaint", frame_index);
@@ -201,7 +216,7 @@ impl Client {
                         self.addr,
                         crate::error_display_chain(err.as_ref())
                     );
-                    self.tcp_endpoint = None;
+                    self.disconnect();
                 }
             }
         }
@@ -225,7 +240,7 @@ impl Client {
                         self.info(),
                         crate::error_display_chain(err.as_ref())
                     );
-                    self.tcp_endpoint = None;
+                    self.disconnect();
                     return;
                 }
             };
@@ -237,7 +252,7 @@ impl Client {
                     // keep polling for more messages
                 }
                 ClientToServerMessage::Goodbye => {
-                    self.tcp_endpoint = None;
+                    self.disconnect();
                     return;
                 }
             }

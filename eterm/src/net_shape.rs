@@ -1,7 +1,7 @@
 use egui::epaint::{self, Color32, Pos2, Rect, Stroke, TextureId};
 
 /// Like [`epaint::Mesh`], but optimized for transport over a network.
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NetMesh {
     pub texture_id: TextureId,
     pub indices: Vec<u32>,
@@ -37,7 +37,7 @@ impl From<&NetMesh> for epaint::Mesh {
 // ----------------------------------------------------------------------------
 
 /// Like [`epaint::Shape`], but optimized for transport over a network.
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum NetShape {
     Circle(epaint::CircleShape),
     LineSegment { points: [Pos2; 2], stroke: Stroke },
@@ -48,7 +48,7 @@ pub enum NetShape {
 }
 
 /// How to draw some text on screen.
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct NetTextShape {
     pub pos: Pos2,
     pub job: epaint::text::LayoutJob,
@@ -57,7 +57,7 @@ pub struct NetTextShape {
     pub angle: f32,
 }
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ClippedNetShape(Rect, NetShape);
 
 pub fn to_clipped_net_shapes(in_shapes: Vec<epaint::ClippedShape>) -> Vec<ClippedNetShape> {

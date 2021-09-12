@@ -10,8 +10,6 @@ fn main() {
     let mut eterm_server = eterm::Server::new("0.0.0.0:8505").unwrap();
     eterm_server.set_minimum_update_interval(1.0);
 
-    let mut frame_nr = 0;
-
     let mut demo_windows = egui_demo_lib::DemoWindows::default();
 
     loop {
@@ -21,15 +19,11 @@ fn main() {
                     ui.horizontal(|ui| {
                         ui.label("Server time:");
                         ui_clock(ui);
-                        ui.separator();
-                        ui.label(format!("Frame #{}", frame_nr));
                     });
                 });
                 demo_windows.ui(egui_ctx);
             })
             .unwrap();
-
-        frame_nr += 1;
 
         std::thread::sleep(std::time::Duration::from_secs_f32(1.0 / 60.0));
     }
