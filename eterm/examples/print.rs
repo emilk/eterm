@@ -1,3 +1,4 @@
+//! Print info to help guide what encoding to use for the network.
 use egui::epaint;
 
 /// anti_alias gives us around 23% savings in final bandwidth
@@ -7,7 +8,7 @@ fn example_output(anti_alias: bool) -> (egui::Output, Vec<egui::ClippedMesh>) {
 
     let raw_input = egui::RawInput::default();
     let mut demo_windows = egui_demo_lib::DemoWindows::default();
-    ctx.begin_frame(raw_input.clone());
+    ctx.begin_frame(raw_input);
     demo_windows.ui(&ctx);
     let (output, shapes) = ctx.end_frame();
     let clipped_meshes = ctx.tessellate(shapes);
@@ -18,7 +19,7 @@ fn example_shapes() -> (egui::Output, Vec<epaint::ClippedShape>) {
     let mut ctx = egui::CtxRef::default();
     let raw_input = egui::RawInput::default();
     let mut demo_windows = egui_demo_lib::DemoWindows::default();
-    ctx.begin_frame(raw_input.clone());
+    ctx.begin_frame(raw_input);
     demo_windows.ui(&ctx);
     ctx.end_frame()
 }
@@ -26,11 +27,6 @@ fn example_shapes() -> (egui::Output, Vec<epaint::ClippedShape>) {
 fn bincode<S: ?Sized + serde::Serialize>(data: &S) -> Vec<u8> {
     use bincode::Options as _;
     bincode::options().serialize(data).unwrap()
-}
-
-fn bincode_decode<'a, T: serde::Deserialize<'a>>(bytes: &'a [u8]) -> T {
-    use bincode::Options as _;
-    bincode::options().deserialize(bytes).unwrap()
 }
 
 fn zstd(data: &[u8], level: i32) -> Vec<u8> {

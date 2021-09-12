@@ -116,7 +116,7 @@ impl Client {
                     clipped_net_shapes,
                 } => {
                     let clipped_shapes =
-                        crate::net_shape::from_clipped_net_shapes(&fonts, clipped_net_shapes);
+                        crate::net_shape::from_clipped_net_shapes(fonts, clipped_net_shapes);
                     let tesselator_options =
                         egui::epaint::tessellator::TessellationOptions::from_pixels_per_point(
                             pixels_per_point,

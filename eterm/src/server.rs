@@ -20,6 +20,9 @@ pub struct Server {
 
 impl Server {
     /// Start listening for connections on this addr (e.g. "0.0.0.0:8585")
+    ///
+    /// # Errors
+    /// Can fail if the port is already taken.
     pub fn new(bind_addr: &str) -> anyhow::Result<Self> {
         let tcp_listener = TcpListener::bind(bind_addr).context("binding server TCP socket")?;
         tcp_listener
@@ -34,6 +37,10 @@ impl Server {
         })
     }
 
+    /// Call frequently (e.g. 60 times per second) with the ui you'd like to show to clients.
+    ///
+    /// # Errors
+    /// Underlying TCP errors.
     pub fn show(&mut self, mut show: impl FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
         self.show_dyn(&mut show)
     }

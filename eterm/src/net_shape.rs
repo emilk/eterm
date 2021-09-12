@@ -13,7 +13,7 @@ pub struct NetMesh {
 impl From<&epaint::Mesh> for NetMesh {
     fn from(mesh: &epaint::Mesh) -> Self {
         Self {
-            texture_id: mesh.texture_id.clone(),
+            texture_id: mesh.texture_id,
             indices: mesh.indices.clone(),
             pos: mesh.vertices.iter().map(|v| v.pos).collect(),
             uv: mesh.vertices.iter().map(|v| v.uv).collect(),
@@ -25,7 +25,7 @@ impl From<&epaint::Mesh> for NetMesh {
 impl From<&NetMesh> for epaint::Mesh {
     fn from(mesh: &NetMesh) -> epaint::Mesh {
         epaint::Mesh {
-            texture_id: mesh.texture_id.clone(),
+            texture_id: mesh.texture_id,
             indices: mesh.indices.clone(),
             vertices: itertools::izip!(&mesh.pos, &mesh.uv, &mesh.color)
                 .map(|(&pos, &uv, &color)| epaint::Vertex { pos, uv, color })

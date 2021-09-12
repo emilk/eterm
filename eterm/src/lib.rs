@@ -97,7 +97,7 @@ pub enum ClientToServerMessage {
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum ServerToClientMessage {
     /// Sent first to all clients so they know how to paint
-    /// the [`eterm::NetShape`]:s.
+    /// the [`crate::net_shape::NetShape`]:s.
     Fonts {
         font_definitions: egui::FontDefinitions,
     },
@@ -110,7 +110,7 @@ pub enum ServerToClientMessage {
     },
 }
 
-pub fn encode_message<M: ?Sized + serde::Serialize>(message: &M) -> anyhow::Result<Packet> {
+fn encode_message<M: ?Sized + serde::Serialize>(message: &M) -> anyhow::Result<Packet> {
     use anyhow::Context as _;
     use bincode::Options as _;
 
@@ -123,7 +123,7 @@ pub fn encode_message<M: ?Sized + serde::Serialize>(message: &M) -> anyhow::Resu
     Ok(compressed.into())
 }
 
-pub fn decode_message<M: serde::de::DeserializeOwned>(packet: &[u8]) -> anyhow::Result<M> {
+fn decode_message<M: serde::de::DeserializeOwned>(packet: &[u8]) -> anyhow::Result<M> {
     use anyhow::Context as _;
     use bincode::Options as _;
 
@@ -148,7 +148,8 @@ pub(crate) fn error_display_chain(error: &dyn std::error::Error) -> String {
 
 // ----------------------------------------------------------------------------
 
-pub struct TcpEndpoint {
+/// Wrapper around a non-blocking [`std::net::TcpStream`].
+pub(crate) struct TcpEndpoint {
     tcp_stream: std::net::TcpStream,
 }
 
