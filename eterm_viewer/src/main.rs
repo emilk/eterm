@@ -25,52 +25,55 @@ fn main() {
 
     let mut egui_glium = egui_glium::EguiGlium::new(&display);
 
+    let mut last_sent_input = None;
+
     event_loop.run(move |event, _, control_flow| {
         let mut redraw = || {
-            client.send_input(egui_glium.take_raw_input(&display));
+            let mut new_input = egui_glium.take_raw_input(&display);
+            new_input.time = None; // server knows the time
+            if last_sent_input.as_ref() != Some(&new_input) {
+                client.send_input(new_input.clone());
+                last_sent_input = Some(new_input);
+            }
 
             let pixels_per_point = egui_glium.pixels_per_point();
-            let frame = client.update(pixels_per_point);
-
-            let EguiFrame {
-                frame_index,
-                output,
-                clipped_meshes,
-            } = frame;
-
-            if output.needs_repaint {
-                // eprintln!("painted frame {}, needs_repaint", frame_index);
-                display.gl_window().window().request_redraw();
-                glutin::event_loop::ControlFlow::Poll
-            } else {
-                // eprintln!("painted frame {}", frame_index);
-                glutin::event_loop::ControlFlow::Wait
-            };
-
-            egui_glium.handle_output(&display, output);
-
-            {
-                use glium::Surface as _;
-                let mut target = display.draw();
-
-                let clear_color = egui::Rgba::from_rgb(0.1, 0.3, 0.2);
-                target.clear_color(
-                    clear_color[0],
-                    clear_color[1],
-                    clear_color[2],
-                    clear_color[3],
-                );
-
-                egui_glium.painter_mut().paint_meshes(
-                    &display,
-                    &mut target,
-                    pixels_per_point,
+            if let Some(frame) = client.update(pixels_per_point) {
+                let EguiFrame {
+                    frame_index: _,
+                    output,
                     clipped_meshes,
-                    &client.texture(),
-                );
+                } = frame;
 
-                target.finish().unwrap();
+                egui_glium.handle_output(&display, output);
+
+                {
+                    use glium::Surface as _;
+                    let mut target = display.draw();
+
+                    let clear_color = egui::Rgba::from_rgb(0.1, 0.3, 0.2);
+                    target.clear_color(
+                        clear_color[0],
+                        clear_color[1],
+                        clear_color[2],
+                        clear_color[3],
+                    );
+
+                    egui_glium.painter_mut().paint_meshes(
+                        &display,
+                        &mut target,
+                        pixels_per_point,
+                        clipped_meshes,
+                        &client.texture(),
+                    );
+
+                    target.finish().unwrap();
+                }
             }
+
+            std::thread::sleep(std::time::Duration::from_millis(10));
+
+            display.gl_window().window().request_redraw();
+            *control_flow = glutin::event_loop::ControlFlow::Wait;
         };
 
         match event {
@@ -106,6 +109,7 @@ fn create_display(event_loop: &glutin::event_loop::EventLoop<()>) -> glium::Disp
 
     let context_builder = glutin::ContextBuilder::new()
         .with_depth_buffer(0)
+        .with_double_buffer(Some(true))
         .with_srgb(true)
         .with_stencil_buffer(0)
         .with_vsync(true);

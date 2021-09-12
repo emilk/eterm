@@ -17,7 +17,7 @@ pub struct Client {
 
     font_definitions: egui::FontDefinitions,
     fonts: Option<Fonts>,
-    latest_frame: EguiFrame,
+    latest_frame: Option<EguiFrame>,
 }
 
 impl Drop for Client {
@@ -92,8 +92,10 @@ impl Client {
         self.input_tx.send(input).ok();
     }
 
-    /// Retrieved new events, and gives back what to do
-    pub fn update(&mut self, pixels_per_point: f32) -> EguiFrame {
+    /// Retrieved new events, and gives back what to do.
+    ///
+    /// Return `None` when there is nothing new.
+    pub fn update(&mut self, pixels_per_point: f32) -> Option<EguiFrame> {
         if self.fonts.is_none() {
             self.fonts = Some(Fonts::new(pixels_per_point, self.font_definitions.clone()));
         }
@@ -126,21 +128,15 @@ impl Client {
                         tex_size,
                     );
 
-                    self.latest_frame.frame_index = frame_index;
-                    self.latest_frame.output.append(output);
-                    self.latest_frame.clipped_meshes = clipped_meshes;
+                    let latest_frame = self.latest_frame.get_or_insert_with(EguiFrame::default);
+                    latest_frame.frame_index = frame_index;
+                    latest_frame.output.append(output);
+                    latest_frame.clipped_meshes = clipped_meshes;
                 }
             }
         }
 
-        let output = self.latest_frame.output.take();
-        self.latest_frame.output.needs_repaint = output.needs_repaint;
-
-        EguiFrame {
-            frame_index: self.latest_frame.frame_index,
-            output,
-            clipped_meshes: self.latest_frame.clipped_meshes.clone(),
-        }
+        self.latest_frame.take()
     }
 
     pub fn texture(&self) -> Arc<egui::Texture> {

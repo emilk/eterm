@@ -233,7 +233,7 @@ impl TcpEndpoint {
                 }
                 Err(err) => {
                     if err.kind() == std::io::ErrorKind::WouldBlock {
-                        eprintln!("Write would block, sleeping…");
+                        // doesn't seem to help
                         std::thread::sleep(std::time::Duration::from_millis(5));
                     } else {
                         anyhow::bail!("{:?}", err);
