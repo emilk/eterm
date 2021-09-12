@@ -8,8 +8,14 @@ use egui::RawInput;
 
 use crate::ClientToServerMessage;
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ClientId(u64);
+
 pub struct Server {
-    server_impl: ServerImpl,
+    next_client_id: u64,
+    tcp_listener: TcpListener,
+    clients: HashMap<SocketAddr, Client>,
+    minimum_update_interval: f32,
 }
 
 impl Server {
@@ -20,44 +26,34 @@ impl Server {
             .set_nonblocking(true)
             .context("TCP set_nonblocking")?;
 
-        let server_impl = ServerImpl {
+        Ok(Self {
             next_client_id: 0,
             tcp_listener,
             clients: Default::default(),
-        };
-
-        Ok(Self { server_impl })
+            minimum_update_interval: 1.0,
+        })
     }
 
     pub fn show(&mut self, mut show: impl FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
         self.show_dyn(&mut show)
     }
 
-    fn show_dyn(&mut self, show: &mut dyn FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
-        self.server_impl.accept_new_clients()?;
-        self.server_impl.try_receive();
+    /// Send a new frame to each client at least this often.
+    /// Default: one second.
+    pub fn set_minimum_update_interval(&mut self, seconds: f32) {
+        self.minimum_update_interval = seconds;
+    }
 
-        for client in self.server_impl.clients.values_mut() {
-            client.show(show);
+    fn show_dyn(&mut self, show: &mut dyn FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
+        self.accept_new_clients()?;
+        self.try_receive();
+
+        for client in self.clients.values_mut() {
+            client.show(show, self.minimum_update_interval);
         }
         Ok(())
     }
-}
 
-// ----------------------------------------------------------------------------
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ClientId(u64);
-
-// ----------------------------------------------------------------------------
-
-struct ServerImpl {
-    next_client_id: u64,
-    tcp_listener: TcpListener,
-    clients: HashMap<SocketAddr, Client>,
-}
-
-impl ServerImpl {
     /// non-blocking
     fn accept_new_clients(&mut self) -> anyhow::Result<()> {
         loop {
@@ -84,6 +80,7 @@ impl ServerImpl {
                             frame_index: 0,
                             egui_ctx: Default::default(),
                             input: None,
+                            last_update: None,
                         }
                     });
 
@@ -123,10 +120,15 @@ struct Client {
     egui_ctx: egui::CtxRef,
     /// Set when there is something to do. Cleared after painting.
     input: Option<egui::RawInput>,
+    last_update: Option<std::time::Instant>,
 }
 
 impl Client {
-    fn show(&mut self, show: &mut dyn FnMut(&egui::CtxRef, ClientId)) {
+    fn show(
+        &mut self,
+        show: &mut dyn FnMut(&egui::CtxRef, ClientId),
+        minimum_update_interval: f32,
+    ) {
         if self.tcp_endpoint.is_none() {
             return;
         }
@@ -134,9 +136,19 @@ impl Client {
         let mut input = match self.input.take() {
             Some(input) => input,
             None => {
-                return; // TODO: updarte peroiodically
+                let time_since_last_update =
+                    self.last_update.map_or(f32::INFINITY, |last_update| {
+                        last_update.elapsed().as_secs_f32()
+                    });
+                if time_since_last_update > minimum_update_interval {
+                    Default::default()
+                } else {
+                    return;
+                }
             }
         };
+
+        self.last_update = Some(std::time::Instant::now());
 
         // Ignore client time:
         input.time = Some(self.start_time.elapsed().as_secs_f64());

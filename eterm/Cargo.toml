@@ -14,5 +14,6 @@ serde = { version = "1", features = ["derive"] }
 zstd = "0.9"
 
 [dev-dependencies]
+chrono = "0.4"
 egui_demo_lib = "0.14"
 simple_logger = "1.13"

@@ -9,3 +9,6 @@ members = [
 egui = { git = "https://github.com/emilk/egui", branch = "eterm" }
 egui_demo_lib = { git = "https://github.com/emilk/egui", branch = "eterm" }
 egui_glium = { git = "https://github.com/emilk/egui", branch = "eterm" }
+# egui = { path = "../egui/egui" }
+# egui_demo_lib = { path = "../egui/egui_demo_lib" }
+# egui_glium = { path = "../egui/egui_glium" }
