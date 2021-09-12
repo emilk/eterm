@@ -2,6 +2,25 @@
 name = "eterm"
 version = "0.0.1"
 edition = "2018"
+authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
+description = "Visual terminal for egui"
+homepage = "https://github.com/emilk/eterm"
+license = "MIT OR Apache-2.0"
+readme = "../README.md"
+repository = "https://github.com/emilk/egui"
+categories = ["gui"]
+keywords = ["gui", "egui", "terminal", "thin client"]
+include = [
+  "../LICENSE-APACHE",
+  "../LICENSE-MIT",
+  "**/*.rs",
+  "Cargo.toml",
+]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lib]
 
 [dependencies]
 anyhow = "1.0.43"
