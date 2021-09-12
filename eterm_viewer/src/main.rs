@@ -235,7 +235,7 @@ fn client_gui(ctx: &egui::CtxRef, client: &eterm::Client) {
         .height_range(height..=height)
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
-                client_info_bar(ui, &client);
+                client_info_bar(ui, client);
             });
         });
 }
