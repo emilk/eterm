@@ -4,7 +4,7 @@ use std::sync::{
     Arc,
 };
 
-use egui::{text::Fonts, RawInput};
+use egui::{mutex::Mutex, text::Fonts, util::History, RawInput};
 
 use crate::{ClientToServerMessage, EguiFrame, ServerToClientMessage, TcpEndpoint};
 
@@ -18,6 +18,8 @@ pub struct Client {
     font_definitions: egui::FontDefinitions,
     fonts: Option<Fonts>,
     latest_frame: Option<EguiFrame>,
+
+    bandwidth_history: Arc<Mutex<History<f32>>>,
 }
 
 impl Drop for Client {
@@ -35,6 +37,7 @@ impl Client {
     pub fn new(addr: String) -> Self {
         let alive = Arc::new(AtomicBool::new(true));
         let connected = Arc::new(AtomicBool::new(false));
+        let mut bandwidth_history = Arc::new(Mutex::new(History::from_max_len_age(200, 2.0)));
 
         let (input_tx, mut input_rx) = mpsc::channel();
         let (mut server_msg_tx, server_msg_rx) = mpsc::channel();
@@ -48,6 +51,7 @@ impl Client {
             font_definitions: Default::default(),
             fonts: None,
             latest_frame: Default::default(),
+            bandwidth_history: bandwidth_history.clone(),
         };
 
         std::thread::spawn(move || {
@@ -57,7 +61,12 @@ impl Client {
                     Ok(tcp_stream) => {
                         log::info!("Connected!",);
                         connected.store(true, SeqCst);
-                        if let Err(err) = run(tcp_stream, &mut input_rx, &mut server_msg_tx) {
+                        if let Err(err) = run(
+                            tcp_stream,
+                            &mut input_rx,
+                            &mut server_msg_tx,
+                            &mut bandwidth_history,
+                        ) {
                             log::info!(
                                 "Connection lost: {}",
                                 crate::error_display_chain(err.as_ref())
@@ -84,12 +93,17 @@ impl Client {
     }
 
     /// Are we currently connect to the server?
-    pub fn connected(&self) -> bool {
+    pub fn is_connected(&self) -> bool {
         self.connected.load(SeqCst)
     }
 
     pub fn send_input(&self, input: RawInput) {
         self.input_tx.send(input).ok();
+    }
+
+    /// Estimated bandwidth use (down)
+    pub fn bytes_per_second(&self) -> f32 {
+        self.bandwidth_history.lock().sum_over_time().unwrap_or(0.0)
     }
 
     /// Retrieved new events, and gives back what to do.
@@ -148,6 +162,7 @@ fn run(
     tcp_stream: std::net::TcpStream,
     input_rx: &mut mpsc::Receiver<egui::RawInput>,
     server_msg_tx: &mut mpsc::Sender<ServerToClientMessage>,
+    bandwidth_history: &mut Arc<Mutex<History<f32>>>,
 ) -> anyhow::Result<()> {
     use anyhow::Context as _;
 
@@ -170,10 +185,16 @@ fn run(
             }
         }
 
-        while let Some(message) = tcp_endpoint.try_receive_message()? {
+        while let Some(packet) = tcp_endpoint.try_receive_packet().context("receive")? {
+            bandwidth_history.lock().add(now(), packet.len() as f32);
+            let message = crate::decode_message(&packet).context("decode")?;
             server_msg_tx.send(message)?;
         }
 
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
+}
+
+fn now() -> f64 {
+    std::time::UNIX_EPOCH.elapsed().unwrap().as_secs_f64()
 }

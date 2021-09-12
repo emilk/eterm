@@ -70,6 +70,13 @@
 use eterm::EguiFrame;
 use glium::glutin;
 
+/// We reserve this much space for eterm to show some stats.
+/// The rest is used for the view of the remove server.
+const TOP_BAR_HEIGHT: f32 = 24.0;
+
+/// Repaint every so often to check connection status etc.
+const MIN_REPAINT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+
 /// eterm viewer viewer.
 ///
 /// Connects to an eterm server somewhere.
@@ -96,17 +103,31 @@ fn main() {
 
     let mut last_sent_input = None;
 
+    let mut latest_eterm_meshes = Default::default();
+
+    let mut needs_repaint = true;
+    let mut last_repaint = std::time::Instant::now();
+
     event_loop.run(move |event, _, control_flow| {
         let mut redraw = || {
-            let mut new_input = egui_glium.take_raw_input(&display);
-            new_input.time = None; // server knows the time
-            if last_sent_input.as_ref() != Some(&new_input) {
-                client.send_input(new_input.clone());
-                last_sent_input = Some(new_input);
+            let raw_input = egui_glium.take_raw_input(&display);
+
+            let mut sent_input = raw_input.clone();
+            sent_input.time = None; // server knows the time
+            if let Some(screen_rect) = &mut sent_input.screen_rect {
+                screen_rect.min.y += TOP_BAR_HEIGHT;
+                screen_rect.max.y = screen_rect.max.y.max(screen_rect.min.y);
+            }
+
+            if last_sent_input.as_ref() != Some(&sent_input) {
+                client.send_input(sent_input.clone());
+                last_sent_input = Some(sent_input);
+                needs_repaint = true;
             }
 
             let pixels_per_point = egui_glium.pixels_per_point();
             if let Some(frame) = client.update(pixels_per_point) {
+                // We got something new from the server!
                 let EguiFrame {
                     frame_index: _,
                     output,
@@ -115,28 +136,39 @@ fn main() {
 
                 egui_glium.handle_output(&display, output);
 
-                {
-                    use glium::Surface as _;
-                    let mut target = display.draw();
+                latest_eterm_meshes = clipped_meshes;
+                needs_repaint = true;
+            }
 
-                    let clear_color = egui::Rgba::from_rgb(0.1, 0.3, 0.2);
-                    target.clear_color(
-                        clear_color[0],
-                        clear_color[1],
-                        clear_color[2],
-                        clear_color[3],
-                    );
+            if needs_repaint || last_repaint.elapsed() > MIN_REPAINT_INTERVAL {
+                needs_repaint = false;
+                last_repaint = std::time::Instant::now();
 
-                    egui_glium.painter_mut().paint_meshes(
-                        &display,
-                        &mut target,
-                        pixels_per_point,
-                        clipped_meshes,
-                        &client.texture(),
-                    );
+                // paint the eterm viewer ui:
+                egui_glium.begin_frame_with_input(raw_input);
 
-                    target.finish().unwrap();
-                }
+                client_gui(egui_glium.ctx(), &client);
+
+                let (needs_repaint_again, clipped_shapes) = egui_glium.end_frame(&display);
+                needs_repaint |= needs_repaint_again;
+
+                use glium::Surface as _;
+                let mut target = display.draw();
+
+                let cc = egui::Rgba::from_rgb(0.1, 0.3, 0.2);
+                target.clear_color(cc[0], cc[1], cc[2], cc[3]);
+
+                egui_glium.painter_mut().paint_meshes(
+                    &display,
+                    &mut target,
+                    pixels_per_point,
+                    latest_eterm_meshes.clone(),
+                    &client.texture(),
+                );
+
+                egui_glium.paint(&display, &mut target, clipped_shapes);
+
+                target.finish().unwrap();
             }
 
             std::thread::sleep(std::time::Duration::from_millis(10));
@@ -159,7 +191,7 @@ fn main() {
 
                 egui_glium.on_event(&event);
 
-                display.gl_window().window().request_redraw(); // TODO: ask egui if the events warrants a repaint instead
+                display.gl_window().window().request_redraw();
             }
 
             _ => (),
@@ -184,4 +216,38 @@ fn create_display(event_loop: &glutin::event_loop::EventLoop<()>) -> glium::Disp
         .with_vsync(true);
 
     glium::Display::new(window_builder, context_builder, event_loop).unwrap()
+}
+
+fn client_gui(ctx: &egui::CtxRef, client: &eterm::Client) {
+    // Chose a theme that sets us apart from the server:
+    let mut visuals = ctx.style().visuals.clone();
+    let panel_background = if visuals.dark_mode {
+        egui::Color32::from_rgb(55, 0, 105)
+    } else {
+        egui::Color32::from_rgb(255, 240, 0)
+    };
+    visuals.widgets.noninteractive.bg_fill = panel_background;
+    ctx.set_visuals(visuals);
+
+    let height = TOP_BAR_HEIGHT - 4.0; // add some breathing room
+
+    egui::TopBottomPanel::top("eterm_viewer_panel")
+        .height_range(height..=height)
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                client_info_bar(ui, &client);
+            });
+        });
+}
+
+fn client_info_bar(ui: &mut egui::Ui, client: &eterm::Client) {
+    if client.is_connected() {
+        ui.label(format!(
+            "Connected to {}, {:.2} MB/s",
+            client.addr(),
+            client.bytes_per_second() * 1e-6
+        ));
+    } else {
+        ui.label(format!("Connecting to {}…", client.addr()));
+    }
 }
