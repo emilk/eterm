@@ -73,7 +73,10 @@ fn to_net_shapes(
     in_shape: epaint::Shape,
     out_net_shapes: &mut Vec<ClippedNetShape>,
 ) {
-    // TODO: cull here!
+    if !clip_rect.is_positive() {
+        return;
+    }
+
     match in_shape {
         epaint::Shape::Noop => {}
         epaint::Shape::Vec(shapes) => {
@@ -82,37 +85,56 @@ fn to_net_shapes(
             }
         }
         epaint::Shape::Circle(circle_shape) => {
-            out_net_shapes.push(ClippedNetShape(clip_rect, NetShape::Circle(circle_shape)));
+            if circle_shape.radius > 0.0
+                && clip_rect
+                    .expand(circle_shape.radius + circle_shape.stroke.width)
+                    .contains(circle_shape.center)
+            {
+                out_net_shapes.push(ClippedNetShape(clip_rect, NetShape::Circle(circle_shape)));
+            }
         }
         epaint::Shape::LineSegment { points, stroke } => {
-            out_net_shapes.push(ClippedNetShape(
-                clip_rect,
-                NetShape::LineSegment { points, stroke },
-            ));
+            if !stroke.is_empty()
+                && clip_rect
+                    .intersects(Rect::from_two_pos(points[0], points[1]).expand(stroke.width))
+            {
+                out_net_shapes.push(ClippedNetShape(
+                    clip_rect,
+                    NetShape::LineSegment { points, stroke },
+                ));
+            }
         }
         epaint::Shape::Path(path_shape) => {
-            out_net_shapes.push(ClippedNetShape(clip_rect, NetShape::Path(path_shape)));
+            if path_shape.points.len() >= 2 && clip_rect.intersects(path_shape.bounding_rect()) {
+                out_net_shapes.push(ClippedNetShape(clip_rect, NetShape::Path(path_shape)));
+            }
         }
         epaint::Shape::Rect(rect_shape) => {
-            out_net_shapes.push(ClippedNetShape(clip_rect, NetShape::Rect(rect_shape)));
+            if clip_rect.intersects(rect_shape.bounding_rect()) && !rect_shape.rect.is_negative() {
+                out_net_shapes.push(ClippedNetShape(clip_rect, NetShape::Rect(rect_shape)));
+            }
         }
         epaint::Shape::Text(text_shape) => {
-            out_net_shapes.push(ClippedNetShape(
-                clip_rect,
-                NetShape::Text(NetTextShape {
-                    pos: text_shape.pos,
-                    job: (*text_shape.galley.job).clone(),
-                    underline: text_shape.underline,
-                    override_text_color: text_shape.override_text_color,
-                    angle: text_shape.angle,
-                }),
-            ));
+            if clip_rect.intersects(text_shape.bounding_rect()) && !text_shape.galley.is_empty() {
+                out_net_shapes.push(ClippedNetShape(
+                    clip_rect,
+                    NetShape::Text(NetTextShape {
+                        pos: text_shape.pos,
+                        job: (*text_shape.galley.job).clone(),
+                        underline: text_shape.underline,
+                        override_text_color: text_shape.override_text_color,
+                        angle: text_shape.angle,
+                    }),
+                ));
+            }
         }
         epaint::Shape::Mesh(mesh) => {
-            out_net_shapes.push(ClippedNetShape(
-                clip_rect,
-                NetShape::Mesh(NetMesh::from(&mesh)),
-            ));
+            if clip_rect.intersects(mesh.calc_bounds()) {
+                out_net_shapes.push(ClippedNetShape(
+                    clip_rect,
+                    NetShape::Mesh(NetMesh::from(&mesh)),
+                ));
+            }
         }
     }
 }
