@@ -150,6 +150,8 @@ impl Client {
             }
         }
 
+        fonts.end_frame(); // make sure to evict galley cache
+
         self.latest_frame.take()
     }
 
