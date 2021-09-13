@@ -12,14 +12,16 @@ pub struct Client {
     addr: String,
     connected: Arc<AtomicBool>,
     alive: Arc<AtomicBool>,
-    input_tx: mpsc::Sender<egui::RawInput>,
-    server_msg_rx: mpsc::Receiver<ServerToClientMessage>,
+    outgoing_msg_tx: mpsc::Sender<ClientToServerMessage>,
+    incoming_msg_rx: mpsc::Receiver<ServerToClientMessage>,
 
     font_definitions: egui::FontDefinitions,
     fonts: Option<Fonts>,
     latest_frame: Option<EguiFrame>,
 
     bandwidth_history: Arc<Mutex<History<f32>>>,
+    latency_history: History<f32>,
+    frame_history: History<()>,
 }
 
 impl Drop for Client {
@@ -37,21 +39,23 @@ impl Client {
     pub fn new(addr: String) -> Self {
         let alive = Arc::new(AtomicBool::new(true));
         let connected = Arc::new(AtomicBool::new(false));
-        let mut bandwidth_history = Arc::new(Mutex::new(History::from_max_len_age(200, 2.0)));
+        let mut bandwidth_history = Arc::new(Mutex::new(History::new(0..200, 2.0)));
 
-        let (input_tx, mut input_rx) = mpsc::channel();
-        let (mut server_msg_tx, server_msg_rx) = mpsc::channel();
+        let (outgoing_msg_tx, mut outgoing_msg_rx) = mpsc::channel();
+        let (mut incoming_msg_tx, incoming_msg_rx) = mpsc::channel();
 
         let client = Self {
             addr: addr.clone(),
             connected: connected.clone(),
             alive: alive.clone(),
-            input_tx,
-            server_msg_rx,
+            outgoing_msg_tx,
+            incoming_msg_rx,
             font_definitions: Default::default(),
             fonts: None,
             latest_frame: Default::default(),
             bandwidth_history: bandwidth_history.clone(),
+            latency_history: History::new(1..100, 1.0),
+            frame_history: History::new(2..100, 1.0),
         };
 
         std::thread::spawn(move || {
@@ -63,8 +67,8 @@ impl Client {
                         connected.store(true, SeqCst);
                         if let Err(err) = run(
                             tcp_stream,
-                            &mut input_rx,
-                            &mut server_msg_tx,
+                            &mut outgoing_msg_rx,
+                            &mut incoming_msg_tx,
                             &mut bandwidth_history,
                         ) {
                             log::info!(
@@ -97,13 +101,28 @@ impl Client {
         self.connected.load(SeqCst)
     }
 
-    pub fn send_input(&self, input: RawInput) {
-        self.input_tx.send(input).ok();
+    pub fn send_input(&self, raw_input: RawInput) {
+        self.outgoing_msg_tx
+            .send(ClientToServerMessage::Input {
+                raw_input,
+                client_time: now(),
+            })
+            .ok();
     }
 
-    /// Estimated bandwidth use (down)
+    /// Estimated bandwidth use (downstream).
     pub fn bytes_per_second(&self) -> f32 {
         self.bandwidth_history.lock().sum_over_time().unwrap_or(0.0)
+    }
+
+    /// Smoothed round-trip-time estimate in seconds.
+    pub fn latency(&self) -> Option<f32> {
+        self.latency_history.average()
+    }
+
+    /// Smoothed estimate of the adaptive frames per second.
+    pub fn adaptive_fps(&self) -> Option<f32> {
+        self.frame_history.rate()
     }
 
     /// Retrieved new events, and gives back what to do.
@@ -118,7 +137,7 @@ impl Client {
             *fonts = Fonts::new(pixels_per_point, self.font_definitions.clone());
         }
 
-        while let Ok(msg) = self.server_msg_rx.try_recv() {
+        while let Ok(msg) = self.incoming_msg_rx.try_recv() {
             match msg {
                 ServerToClientMessage::Fonts { font_definitions } => {
                     self.font_definitions = font_definitions;
@@ -128,6 +147,7 @@ impl Client {
                     frame_index,
                     output,
                     clipped_net_shapes,
+                    client_time,
                 } => {
                     let clipped_shapes =
                         crate::net_shape::from_clipped_net_shapes(fonts, clipped_net_shapes);
@@ -146,11 +166,21 @@ impl Client {
                     latest_frame.frame_index = frame_index;
                     latest_frame.output.append(output);
                     latest_frame.clipped_meshes = clipped_meshes;
+
+                    if let Some(client_time) = client_time {
+                        let rtt = (now() - client_time) as f32;
+                        self.latency_history.add(now(), rtt);
+                    }
+
+                    self.frame_history.add(now(), ());
                 }
             }
         }
 
         fonts.end_frame(); // make sure to evict galley cache
+
+        self.bandwidth_history.lock().flush(now());
+        self.latency_history.flush(now());
 
         self.latest_frame.take()
     }
@@ -162,8 +192,8 @@ impl Client {
 
 fn run(
     tcp_stream: std::net::TcpStream,
-    input_rx: &mut mpsc::Receiver<egui::RawInput>,
-    server_msg_tx: &mut mpsc::Sender<ServerToClientMessage>,
+    outgoing_msg_rx: &mut mpsc::Receiver<ClientToServerMessage>,
+    incoming_msg_tx: &mut mpsc::Sender<ServerToClientMessage>,
     bandwidth_history: &mut Arc<Mutex<History<f32>>>,
 ) -> anyhow::Result<()> {
     use anyhow::Context as _;
@@ -176,9 +206,9 @@ fn run(
 
     loop {
         loop {
-            match input_rx.try_recv() {
-                Ok(raw_input) => {
-                    tcp_endpoint.send_message(&ClientToServerMessage::Input { raw_input })?;
+            match outgoing_msg_rx.try_recv() {
+                Ok(message) => {
+                    tcp_endpoint.send_message(&message)?;
                 }
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => {
@@ -190,7 +220,7 @@ fn run(
         while let Some(packet) = tcp_endpoint.try_receive_packet().context("receive")? {
             bandwidth_history.lock().add(now(), packet.len() as f32);
             let message = crate::decode_message(&packet).context("decode")?;
-            server_msg_tx.send(message)?;
+            incoming_msg_tx.send(message)?;
         }
 
         std::thread::sleep(std::time::Duration::from_millis(5));

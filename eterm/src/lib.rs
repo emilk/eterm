@@ -105,7 +105,11 @@ pub struct EguiFrame {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum ClientToServerMessage {
-    Input { raw_input: egui::RawInput },
+    Input {
+        raw_input: egui::RawInput,
+        /// Seconds since epoch. Used to measure latency.
+        client_time: f64,
+    },
     Goodbye,
 }
 
@@ -122,6 +126,9 @@ pub enum ServerToClientMessage {
         frame_index: u64,
         output: egui::Output,
         clipped_net_shapes: Vec<net_shape::ClippedNetShape>,
+        /// If this frame is a response to a `ClientToServerMessage::Input`.
+        /// Used to measure latency.
+        client_time: Option<f64>,
     },
 }
 

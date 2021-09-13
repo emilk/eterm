@@ -87,6 +87,7 @@ impl Server {
                             frame_index: 0,
                             egui_ctx: Default::default(),
                             input: None,
+                            client_time: None,
                             last_update: None,
                             last_visuals: Default::default(),
                         }
@@ -128,6 +129,8 @@ struct Client {
     egui_ctx: egui::CtxRef,
     /// Set when there is something to do. Cleared after painting.
     input: Option<egui::RawInput>,
+    /// The client time of the last input we got from them.
+    client_time: Option<f64>,
     last_update: Option<std::time::Instant>,
     last_visuals: Vec<ClippedNetShape>,
 }
@@ -146,6 +149,8 @@ impl Client {
         if self.tcp_endpoint.is_none() {
             return;
         }
+
+        let client_time = self.client_time.take();
 
         let mut input = match self.input.take() {
             Some(input) => input,
@@ -186,6 +191,7 @@ impl Client {
                 frame_index,
                 output,
                 clipped_net_shapes: clipped_net_shapes.clone(),
+                client_time,
             };
 
             self.last_visuals = clipped_net_shapes;
@@ -246,9 +252,13 @@ impl Client {
             };
 
             match message {
-                ClientToServerMessage::Input { raw_input } => {
+                ClientToServerMessage::Input {
+                    raw_input,
+                    client_time,
+                } => {
                     // eprintln!("Received new input");
                     self.input(raw_input);
+                    self.client_time = Some(client_time);
                     // keep polling for more messages
                 }
                 ClientToServerMessage::Goodbye => {

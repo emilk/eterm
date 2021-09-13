@@ -242,11 +242,21 @@ fn client_gui(ctx: &egui::CtxRef, client: &eterm::Client) {
 
 fn client_info_bar(ui: &mut egui::Ui, client: &eterm::Client) {
     if client.is_connected() {
-        ui.label(format!(
-            "Connected to {}, {:.2} MB/s",
-            client.addr(),
-            client.bytes_per_second() * 1e-6
-        ));
+        ui.label(format!("Connected to {}", client.addr(),));
+        ui.separator();
+        ui.label(format!("{:.2} MB/s", client.bytes_per_second() * 1e-6));
+        ui.separator();
+        ui.label("adaptive FPS:");
+        let fps = client.adaptive_fps().unwrap_or(0.0);
+        ui.add_sized(
+            [20.0, ui.available_height()],
+            egui::Label::new(format!("{:.0}", fps)),
+        );
+        ui.separator();
+        match client.latency() {
+            Some(latency) => ui.label(format!("latency: {:.0} ms", latency * 1e3)),
+            None => ui.label("latency: "),
+        };
     } else {
         ui.label(format!("Connecting to {}…", client.addr()));
     }
