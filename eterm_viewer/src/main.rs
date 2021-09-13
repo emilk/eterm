@@ -246,10 +246,15 @@ fn client_info_bar(ui: &mut egui::Ui, client: &eterm::Client) {
         ui.separator();
         ui.label(format!("{:.2} MB/s", client.bytes_per_second() * 1e-6));
         ui.separator();
+        ui.label(format!(
+            "{:5.1} kB / frame",
+            client.average_frame_packet_size().unwrap_or(0.0) * 1e-3
+        ));
+        ui.separator();
         ui.label("adaptive FPS:");
         let fps = client.adaptive_fps().unwrap_or(0.0);
         ui.add_sized(
-            [20.0, ui.available_height()],
+            [16.0, ui.available_height()],
             egui::Label::new(format!("{:.0}", fps)),
         );
         ui.separator();

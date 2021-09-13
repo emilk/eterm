@@ -21,6 +21,7 @@ pub struct Client {
     latest_frame: Option<EguiFrame>,
 
     bandwidth_history: Arc<Mutex<History<f32>>>,
+    frame_size_history: Arc<Mutex<History<f32>>>,
     latency_history: History<f32>,
     frame_history: History<()>,
 }
@@ -41,6 +42,7 @@ impl Client {
         let alive = Arc::new(AtomicBool::new(true));
         let connected = Arc::new(AtomicBool::new(false));
         let mut bandwidth_history = Arc::new(Mutex::new(History::new(0..200, 2.0)));
+        let mut frame_size_history = Arc::new(Mutex::new(History::new(1..100, 0.5)));
 
         let (outgoing_msg_tx, mut outgoing_msg_rx) = mpsc::channel();
         let (mut incoming_msg_tx, incoming_msg_rx) = mpsc::channel();
@@ -55,6 +57,7 @@ impl Client {
             fonts: None,
             latest_frame: Default::default(),
             bandwidth_history: bandwidth_history.clone(),
+            frame_size_history: frame_size_history.clone(),
             latency_history: History::new(1..100, 1.0),
             frame_history: History::new(2..100, 1.0),
         };
@@ -71,6 +74,7 @@ impl Client {
                             &mut outgoing_msg_rx,
                             &mut incoming_msg_tx,
                             &mut bandwidth_history,
+                            &mut frame_size_history,
                         ) {
                             log::info!(
                                 "Connection lost: {}",
@@ -113,7 +117,12 @@ impl Client {
 
     /// Estimated bandwidth use (downstream).
     pub fn bytes_per_second(&self) -> f32 {
-        self.bandwidth_history.lock().sum_over_time().unwrap_or(0.0)
+        self.bandwidth_history.lock().bandwidth().unwrap_or(0.0)
+    }
+
+    /// Estimated size of one frame packet
+    pub fn average_frame_packet_size(&self) -> Option<f32> {
+        self.frame_size_history.lock().average()
     }
 
     /// Smoothed round-trip-time estimate in seconds.
@@ -181,7 +190,9 @@ impl Client {
         fonts.end_frame(); // make sure to evict galley cache
 
         self.bandwidth_history.lock().flush(now());
+        self.frame_size_history.lock().flush(now());
         self.latency_history.flush(now());
+        self.frame_history.flush(now());
 
         self.latest_frame.take()
     }
@@ -196,6 +207,7 @@ fn run(
     outgoing_msg_rx: &mut mpsc::Receiver<ClientToServerMessage>,
     incoming_msg_tx: &mut mpsc::Sender<ServerToClientMessage>,
     bandwidth_history: &mut Arc<Mutex<History<f32>>>,
+    frame_size_history: &mut Arc<Mutex<History<f32>>>,
 ) -> anyhow::Result<()> {
     use anyhow::Context as _;
 
@@ -221,6 +233,9 @@ fn run(
         while let Some(packet) = tcp_endpoint.try_receive_packet().context("receive")? {
             bandwidth_history.lock().add(now(), packet.len() as f32);
             let message = crate::decode_message(&packet).context("decode")?;
+            if let ServerToClientMessage::Frame { .. } = &message {
+                frame_size_history.lock().add(now(), packet.len() as f32);
+            }
             incoming_msg_tx.send(message)?;
         }
 
