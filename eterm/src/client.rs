@@ -4,7 +4,8 @@ use std::sync::{
     Arc,
 };
 
-use egui::{mutex::Mutex, text::Fonts, util::History, RawInput};
+use egui::{text::Fonts, util::History, RawInput};
+use parking_lot::Mutex;
 
 use crate::{ClientToServerMessage, EguiFrame, ServerToClientMessage, TcpEndpoint};
 
