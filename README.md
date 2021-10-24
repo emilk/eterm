@@ -40,12 +40,20 @@ What is sent is not a picture of the rendered gui, but basic shapes such as rect
 
 To save bandwidth, frames are only sent when there is change on screen.
 
-## Limitations
+## Testing
+``` sh
+cargo run --release --example game_server  &
+cargo run --release -p eterm_viewer -- --url 127.0.0.1:8505
+```
+
+## Limitations and future work
 There is no authentication and no encryption.
 
 The implementation is pretty basic so far, and is probably wasting a bit of CPU.
 
 eterm uses no delta-encoding, so with visually intense scenes it can use a lot of bandwidth (> 1MB/s).
+
+It would be nice to port the viewer to `eframe` so we can compile it for the web. Requires a Rust TCP library that works with web-sockets.
 
 ## Screenshot
 

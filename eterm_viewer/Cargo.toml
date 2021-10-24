@@ -22,8 +22,8 @@ all-features = true
 
 [dependencies]
 argh = "0.1.6"
-egui = "0.14.2"
-egui_glium = "0.14"
+egui = "0.15.0"
+egui_glium = "0.15.0"
 eterm = { version = "0.0.1", path = "../eterm" }
 glium = "0.30"
 log = "0.4"
