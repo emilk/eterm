@@ -1,16 +1,14 @@
 //! Print info to help guide what encoding to use for the network.
 use egui::epaint;
 
-/// anti_alias gives us around 23% savings in final bandwidth
+/// `anti_alias=false` gives us around 23% savings in final bandwidth
 fn example_output(anti_alias: bool) -> (egui::Output, Vec<egui::ClippedMesh>) {
     let mut ctx = egui::CtxRef::default();
     ctx.memory().options.tessellation_options.anti_alias = anti_alias;
 
     let raw_input = egui::RawInput::default();
     let mut demo_windows = egui_demo_lib::DemoWindows::default();
-    ctx.begin_frame(raw_input);
-    demo_windows.ui(&ctx);
-    let (output, shapes) = ctx.end_frame();
+    let (output, shapes) = ctx.run(raw_input, |ctx| demo_windows.ui(&ctx));
     let clipped_meshes = ctx.tessellate(shapes);
     (output, clipped_meshes)
 }
@@ -19,9 +17,7 @@ fn example_shapes() -> (egui::Output, Vec<epaint::ClippedShape>) {
     let mut ctx = egui::CtxRef::default();
     let raw_input = egui::RawInput::default();
     let mut demo_windows = egui_demo_lib::DemoWindows::default();
-    ctx.begin_frame(raw_input);
-    demo_windows.ui(&ctx);
-    ctx.end_frame()
+    ctx.run(raw_input, |ctx| demo_windows.ui(&ctx))
 }
 
 fn bincode<S: ?Sized + serde::Serialize>(data: &S) -> Vec<u8> {

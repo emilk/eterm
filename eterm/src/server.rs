@@ -172,9 +172,9 @@ impl Client {
         // Ignore client time:
         input.time = Some(self.start_time.elapsed().as_secs_f64());
 
-        self.egui_ctx.begin_frame(input);
-        do_ui(&self.egui_ctx, self.client_id);
-        let (mut output, clipped_shapes) = self.egui_ctx.end_frame();
+        let (mut output, clipped_shapes) = self
+            .egui_ctx
+            .run(input, |egui_ctx| do_ui(egui_ctx, self.client_id));
 
         let clipped_net_shapes = crate::net_shape::to_clipped_net_shapes(clipped_shapes);
 

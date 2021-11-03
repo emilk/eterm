@@ -1,7 +1,8 @@
 [package]
 name = "eterm"
 version = "0.0.1"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
 description = "Visual terminal for egui"
 homepage = "https://github.com/emilk/eterm"

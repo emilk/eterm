@@ -111,7 +111,9 @@ fn main() {
 
     event_loop.run(move |event, _, control_flow| {
         let mut redraw = || {
-            let raw_input = egui_glium.take_raw_input(&display);
+            let raw_input = egui_glium
+                .egui_winit
+                .take_egui_input(display.gl_window().window());
 
             let mut sent_input = raw_input.clone();
             sent_input.time = None; // server knows the time
@@ -126,7 +128,7 @@ fn main() {
                 needs_repaint = true;
             }
 
-            let pixels_per_point = egui_glium.pixels_per_point();
+            let pixels_per_point = egui_glium.egui_winit.pixels_per_point();
             if let Some(frame) = client.update(pixels_per_point) {
                 // We got something new from the server!
                 let EguiFrame {
@@ -135,7 +137,11 @@ fn main() {
                     clipped_meshes,
                 } = frame;
 
-                egui_glium.handle_output(&display, output);
+                egui_glium.egui_winit.handle_output(
+                    display.gl_window().window(),
+                    &egui_glium.egui_ctx,
+                    output,
+                );
 
                 latest_eterm_meshes = clipped_meshes;
                 needs_repaint = true;
@@ -146,12 +152,16 @@ fn main() {
                 last_repaint = std::time::Instant::now();
 
                 // paint the eterm viewer ui:
-                egui_glium.begin_frame_with_input(raw_input);
+                let (egui_output, clipped_shapes) = egui_glium
+                    .egui_ctx
+                    .run(raw_input, |egui_ctx| client_gui(egui_ctx, &client));
 
-                client_gui(egui_glium.ctx(), &client);
-
-                let (needs_repaint_again, clipped_shapes) = egui_glium.end_frame(&display);
-                needs_repaint |= needs_repaint_again;
+                needs_repaint |= egui_output.needs_repaint;
+                egui_glium.egui_winit.handle_output(
+                    display.gl_window().window(),
+                    &egui_glium.egui_ctx,
+                    egui_output,
+                );
 
                 use glium::Surface as _;
                 let mut target = display.draw();
@@ -159,7 +169,7 @@ fn main() {
                 let cc = egui::Rgba::from_rgb(0.1, 0.3, 0.2);
                 target.clear_color(cc[0], cc[1], cc[2], cc[3]);
 
-                egui_glium.painter_mut().paint_meshes(
+                egui_glium.painter.paint_meshes(
                     &display,
                     &mut target,
                     pixels_per_point,
