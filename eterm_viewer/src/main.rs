@@ -174,7 +174,7 @@ fn main() {
                     &mut target,
                     pixels_per_point,
                     latest_eterm_meshes.clone(),
-                    &client.texture(),
+                    &client.font_image(),
                 );
 
                 egui_glium.paint(&display, &mut target, clipped_shapes);
@@ -196,7 +196,8 @@ fn main() {
             glutin::event::Event::RedrawRequested(_) if !cfg!(windows) => redraw(),
 
             glutin::event::Event::WindowEvent { event, .. } => {
-                if egui_glium.is_quit_event(&event) {
+                use glutin::event::WindowEvent;
+                if matches!(event, WindowEvent::CloseRequested | WindowEvent::Destroyed) {
                     *control_flow = glium::glutin::event_loop::ControlFlow::Exit;
                 }
 

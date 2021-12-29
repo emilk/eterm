@@ -8,7 +8,7 @@ fn example_output(anti_alias: bool) -> (egui::Output, Vec<egui::ClippedMesh>) {
 
     let raw_input = egui::RawInput::default();
     let mut demo_windows = egui_demo_lib::DemoWindows::default();
-    let (output, shapes) = ctx.run(raw_input, |ctx| demo_windows.ui(&ctx));
+    let (output, shapes) = ctx.run(raw_input, |ctx| demo_windows.ui(ctx));
     let clipped_meshes = ctx.tessellate(shapes);
     (output, clipped_meshes)
 }
@@ -17,7 +17,7 @@ fn example_shapes() -> (egui::Output, Vec<epaint::ClippedShape>) {
     let mut ctx = egui::CtxRef::default();
     let raw_input = egui::RawInput::default();
     let mut demo_windows = egui_demo_lib::DemoWindows::default();
-    ctx.run(raw_input, |ctx| demo_windows.ui(&ctx))
+    ctx.run(raw_input, |ctx| demo_windows.ui(ctx))
 }
 
 fn bincode<S: ?Sized + serde::Serialize>(data: &S) -> Vec<u8> {
