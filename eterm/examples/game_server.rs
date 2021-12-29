@@ -4,6 +4,7 @@
 fn main() {
     simple_logger::SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
+        .with_utc_timestamps()
         .init()
         .ok();
 
