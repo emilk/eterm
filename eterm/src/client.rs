@@ -165,7 +165,7 @@ impl Client {
                         egui::epaint::tessellator::TessellationOptions::from_pixels_per_point(
                             pixels_per_point,
                         );
-                    let tex_size = fonts.texture().size();
+                    let tex_size = fonts.font_image().size();
                     let clipped_meshes = egui::epaint::tessellator::tessellate_shapes(
                         clipped_shapes,
                         tesselator_options,
@@ -197,8 +197,11 @@ impl Client {
         self.latest_frame.take()
     }
 
-    pub fn texture(&self) -> Arc<egui::Texture> {
-        self.fonts.as_ref().expect("Call update() first").texture()
+    pub fn font_image(&self) -> Arc<egui::FontImage> {
+        self.fonts
+            .as_ref()
+            .expect("Call update() first")
+            .font_image()
     }
 }
 

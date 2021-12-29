@@ -1,7 +1,8 @@
 [package]
 name = "eterm"
 version = "0.0.1"
-edition = "2018"
+edition = "2021"
+rust-version = "1.56"
 authors = ["Emil Ernerfeldt <emil.ernerfeldt@gmail.com>"]
 description = "Visual terminal for egui"
 homepage = "https://github.com/emilk/eterm"
@@ -25,7 +26,7 @@ all-features = true
 [dependencies]
 anyhow = "1.0.43"
 bincode = "1.3"
-egui = { version = "0.15.0", features = ["serialize"] }
+egui = { version = "0.16.0", features = ["serialize"] }
 itertools = "0.10"
 log = "0.4"
 parking_lot = "0.11.2"
@@ -34,5 +35,5 @@ zstd = "0.9"
 
 [dev-dependencies]
 chrono = "0.4"
-egui_demo_lib = { version = "0.15.0", features = ["serialize"] }
+egui_demo_lib = { version = "0.16.0", features = ["serialize"] }
 simple_logger = "1.13"
