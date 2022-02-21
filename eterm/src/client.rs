@@ -63,11 +63,11 @@ impl Client {
         };
 
         std::thread::spawn(move || {
-            log::info!("Connecting to {}…", addr);
+            tracing::info!("Connecting to {}…", addr);
             while alive.load(SeqCst) {
                 match std::net::TcpStream::connect(&addr) {
                     Ok(tcp_stream) => {
-                        log::info!("Connected!",);
+                        tracing::info!("Connected!");
                         connected.store(true, SeqCst);
                         if let Err(err) = run(
                             tcp_stream,
@@ -76,17 +76,17 @@ impl Client {
                             &mut bandwidth_history,
                             &mut frame_size_history,
                         ) {
-                            log::info!(
+                            tracing::info!(
                                 "Connection lost: {}",
                                 crate::error_display_chain(err.as_ref())
                             );
                         } else {
-                            log::info!("Connection closed.",);
+                            tracing::info!("Connection closed.",);
                         }
                         connected.store(false, SeqCst);
                     }
                     Err(err) => {
-                        log::debug!("Failed to connect to {}: {}", addr, err);
+                        tracing::debug!("Failed to connect to {}: {}", addr, err);
                         std::thread::sleep(std::time::Duration::from_secs(1));
                     }
                 }

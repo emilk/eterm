@@ -88,11 +88,8 @@ struct Arguments {
 }
 
 fn main() {
-    simple_logger::SimpleLogger::new()
-        .with_level(log::LevelFilter::Debug)
-        .with_utc_timestamps()
-        .init()
-        .ok();
+    // Log to stdout (if you run with `RUST_LOG=debug`).
+    tracing_subscriber::fmt::init();
 
     let opt: Arguments = argh::from_env();
     let mut client = eterm::Client::new(opt.url);

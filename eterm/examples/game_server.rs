@@ -2,11 +2,8 @@
 //! a eterm at the same time:
 
 fn main() {
-    simple_logger::SimpleLogger::new()
-        .with_level(log::LevelFilter::Debug)
-        .with_utc_timestamps()
-        .init()
-        .ok();
+    // Log to stdout (if you run with `RUST_LOG=debug`).
+    tracing_subscriber::fmt::init();
 
     let mut eterm_server = eterm::Server::new("0.0.0.0:8505").unwrap();
     eterm_server.set_minimum_update_interval(1.0);

@@ -97,7 +97,7 @@ impl Server {
 
                     // TODO: send egui::FontDefinitions to client
 
-                    log::info!("{} connected", client.info());
+                    tracing::info!("{} connected", client.info());
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     break; // No (more) new clients
@@ -216,7 +216,7 @@ impl Client {
             match tcp_endpoint.send_message(&message) {
                 Ok(()) => {}
                 Err(err) => {
-                    log::error!(
+                    tracing::error!(
                         "Failed to send to client {:?} {}: {:?}. Disconnecting.",
                         self.client_id,
                         self.addr,
@@ -227,6 +227,7 @@ impl Client {
             }
         }
     }
+
     /// non-blocking
     fn try_receive(&mut self) {
         loop {
@@ -241,7 +242,7 @@ impl Client {
                 }
                 Ok(Some(message)) => message,
                 Err(err) => {
-                    log::error!(
+                    tracing::error!(
                         "Failed to read from client {}: {:?}. Disconnecting.",
                         self.info(),
                         crate::error_display_chain(err.as_ref())

@@ -27,5 +27,5 @@ egui = "0.16.0"
 egui_glium = "0.16.0"
 eterm = { version = "0.0.1", path = "../eterm" }
 glium = "0.31"
-log = "0.4"
-simple_logger = "1.13"
+tracing = "0.1"
+tracing-subscriber = "0.3"
