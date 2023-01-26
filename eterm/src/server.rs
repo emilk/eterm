@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Context as _;
-use egui::RawInput;
+use egui::{Context, RawInput};
 
 use crate::{net_shape::ClippedNetShape, ClientToServerMessage};
 
@@ -47,11 +47,11 @@ impl Server {
     ///
     /// # Errors
     /// Underlying TCP errors.
-    pub fn show(&mut self, mut do_ui: impl FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
+    pub fn show(&mut self, mut do_ui: impl FnMut(&egui::Context, ClientId)) -> anyhow::Result<()> {
         self.show_dyn(&mut do_ui)
     }
 
-    fn show_dyn(&mut self, do_ui: &mut dyn FnMut(&egui::CtxRef, ClientId)) -> anyhow::Result<()> {
+    fn show_dyn(&mut self, do_ui: &mut dyn FnMut(&egui::Context, ClientId)) -> anyhow::Result<()> {
         self.accept_new_clients()?;
         self.try_receive();
 
@@ -126,7 +126,7 @@ struct Client {
     tcp_endpoint: Option<crate::TcpEndpoint>,
     start_time: std::time::Instant,
     frame_index: u64,
-    egui_ctx: egui::CtxRef,
+    egui_ctx: egui::Context,
     /// Set when there is something to do. Cleared after painting.
     input: Option<egui::RawInput>,
     /// The client time of the last input we got from them.
@@ -141,11 +141,7 @@ impl Client {
         self.last_visuals = Default::default();
     }
 
-    fn show(
-        &mut self,
-        do_ui: &mut dyn FnMut(&egui::CtxRef, ClientId),
-        minimum_update_interval: f32,
-    ) {
+    fn show(&mut self, do_ui: &mut dyn FnMut(&Context, ClientId), minimum_update_interval: f32) {
         if self.tcp_endpoint.is_none() {
             return;
         }
@@ -172,16 +168,13 @@ impl Client {
         // Ignore client time:
         input.time = Some(self.start_time.elapsed().as_secs_f64());
 
-        let (mut output, clipped_shapes) = self
+        let output = self
             .egui_ctx
             .run(input, |egui_ctx| do_ui(egui_ctx, self.client_id));
 
-        let clipped_net_shapes = crate::net_shape::to_clipped_net_shapes(clipped_shapes);
+        let clipped_net_shapes = crate::net_shape::to_clipped_net_shapes(output.shapes);
 
-        let needs_repaint = output.needs_repaint;
-        output.needs_repaint = false; // so we can compare below
-
-        if output == Default::default() && clipped_net_shapes == self.last_visuals {
+        if output.platform_output == Default::default() && clipped_net_shapes == self.last_visuals {
             // No change - save bandwidth and send nothing
         } else {
             let frame_index = self.frame_index;
@@ -189,7 +182,7 @@ impl Client {
 
             let message = crate::ServerToClientMessage::Frame {
                 frame_index,
-                output,
+                platform_output: output.platform_output,
                 clipped_net_shapes: clipped_net_shapes.clone(),
                 client_time,
             };
@@ -198,7 +191,7 @@ impl Client {
             self.send_message(&message);
         }
 
-        if needs_repaint {
+        if output.repaint_after.is_zero() {
             // eprintln!("frame {} painted, needs_repaint", frame_index);
             // Reschedule asap (don't wait for client) to request it.
             self.input = Some(Default::default());

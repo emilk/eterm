@@ -1,4 +1,4 @@
-use egui::epaint::{self, Color32, Pos2, Rect, Stroke, TextureId};
+use egui::epaint::{self, ClippedShape, Color32, Pos2, Rect, Stroke, TextureId};
 
 /// Like [`epaint::Mesh`], but optimized for transport over a network.
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -60,10 +60,10 @@ pub struct NetTextShape {
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ClippedNetShape(Rect, NetShape);
 
-pub fn to_clipped_net_shapes(in_shapes: Vec<epaint::ClippedShape>) -> Vec<ClippedNetShape> {
+pub fn to_clipped_net_shapes(in_shapes: Vec<ClippedShape>) -> Vec<ClippedNetShape> {
     let mut net_shapes = vec![];
-    for epaint::ClippedShape(clip_rect, shape) in in_shapes {
-        to_net_shapes(clip_rect, shape, &mut net_shapes)
+    for epaint::ClippedShape(rect, shape) in in_shapes {
+        to_net_shapes(rect, shape, &mut net_shapes)
     }
     net_shapes
 }
@@ -77,14 +77,13 @@ fn to_net_shapes(
         return;
     }
 
-    match in_shape {
-        epaint::Shape::Noop => {}
-        epaint::Shape::Vec(shapes) => {
+    match in_shape {        
+        egui::Shape::Vec(shapes) => {
             for shape in shapes {
                 to_net_shapes(clip_rect, shape, out_net_shapes);
             }
         }
-        epaint::Shape::Circle(circle_shape) => {
+        egui::Shape::Circle(circle_shape) => {
             if circle_shape.radius > 0.0
                 && clip_rect
                     .expand(circle_shape.radius + circle_shape.stroke.width)
@@ -93,7 +92,7 @@ fn to_net_shapes(
                 out_net_shapes.push(ClippedNetShape(clip_rect, NetShape::Circle(circle_shape)));
             }
         }
-        epaint::Shape::LineSegment { points, stroke } => {
+        egui::Shape::LineSegment { points, stroke } => {
             if !stroke.is_empty()
                 && clip_rect
                     .intersects(Rect::from_two_pos(points[0], points[1]).expand(stroke.width))
@@ -104,18 +103,24 @@ fn to_net_shapes(
                 ));
             }
         }
-        epaint::Shape::Path(path_shape) => {
-            if path_shape.points.len() >= 2 && clip_rect.intersects(path_shape.bounding_rect()) {
+        egui::Shape::Path(path_shape) => {
+            if path_shape.points.len() >= 2
+                && clip_rect.intersects(path_shape.visual_bounding_rect())
+            {
                 out_net_shapes.push(ClippedNetShape(clip_rect, NetShape::Path(path_shape)));
             }
         }
-        epaint::Shape::Rect(rect_shape) => {
-            if clip_rect.intersects(rect_shape.bounding_rect()) && !rect_shape.rect.is_negative() {
+        egui::Shape::Rect(rect_shape) => {
+            if clip_rect.intersects(rect_shape.visual_bounding_rect())
+                && !rect_shape.rect.is_negative()
+            {
                 out_net_shapes.push(ClippedNetShape(clip_rect, NetShape::Rect(rect_shape)));
             }
         }
-        epaint::Shape::Text(text_shape) => {
-            if clip_rect.intersects(text_shape.bounding_rect()) && !text_shape.galley.is_empty() {
+        egui::Shape::Text(text_shape) => {
+            if clip_rect.intersects(text_shape.visual_bounding_rect())
+                && !text_shape.galley.is_empty()
+            {
                 out_net_shapes.push(ClippedNetShape(
                     clip_rect,
                     NetShape::Text(NetTextShape {
@@ -128,7 +133,7 @@ fn to_net_shapes(
                 ));
             }
         }
-        epaint::Shape::Mesh(mesh) => {
+        egui::Shape::Mesh(mesh) => {
             if clip_rect.intersects(mesh.calc_bounds()) {
                 out_net_shapes.push(ClippedNetShape(
                     clip_rect,
@@ -136,6 +141,10 @@ fn to_net_shapes(
                 ));
             }
         }
+        egui::Shape::QuadraticBezier(_)
+        | egui::Shape::Noop 
+        | egui::Shape::CubicBezier(_)
+        | egui::Shape::Callback(_) => {}
     }
 }
 

@@ -75,6 +75,7 @@ pub mod net_shape;
 mod server;
 
 pub use client::Client;
+use egui::{ClippedPrimitive, PlatformOutput};
 pub use server::{ClientId, Server};
 
 use std::sync::Arc;
@@ -99,8 +100,8 @@ pub type Packet = Arc<[u8]>;
 #[derive(Default)]
 pub struct EguiFrame {
     pub frame_index: u64,
-    pub output: egui::Output,
-    pub clipped_meshes: Vec<egui::ClippedMesh>,
+    pub platform_output: PlatformOutput,
+    pub clipped_meshes: Vec<ClippedPrimitive>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -114,6 +115,7 @@ pub enum ClientToServerMessage {
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
+#[allow(clippy::large_enum_variant)]
 pub enum ServerToClientMessage {
     /// Sent first to all clients so they know how to paint
     /// the [`crate::net_shape::NetShape`]:s.
@@ -124,7 +126,7 @@ pub enum ServerToClientMessage {
     /// What to paint to screen.
     Frame {
         frame_index: u64,
-        output: egui::Output,
+        platform_output: PlatformOutput,
         clipped_net_shapes: Vec<net_shape::ClippedNetShape>,
         /// If this frame is a response to a `ClientToServerMessage::Input`.
         /// Used to measure latency.

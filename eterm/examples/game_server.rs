@@ -12,7 +12,7 @@ fn main() {
 
     loop {
         eterm_server
-            .show(|egui_ctx: &egui::CtxRef, _client_id: eterm::ClientId| {
+            .show(|egui_ctx: &egui::Context, _client_id: eterm::ClientId| {
                 egui::TopBottomPanel::bottom("game_server_info").show(egui_ctx, |ui| {
                     ui.horizontal(|ui| {
                         ui.label("Server time:");

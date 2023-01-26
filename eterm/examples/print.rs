@@ -1,23 +1,27 @@
 //! Print info to help guide what encoding to use for the network.
-use egui::epaint;
+use egui::{
+    epaint::{self, ClippedShape, Primitive},
+    ClippedPrimitive, Mesh,
+};
 
 /// `anti_alias=false` gives us around 23% savings in final bandwidth
-fn example_output(anti_alias: bool) -> (egui::Output, Vec<egui::ClippedMesh>) {
-    let mut ctx = egui::CtxRef::default();
+fn example_output(anti_alias: bool) -> (egui::PlatformOutput, Vec<ClippedPrimitive>) {
+    let mut ctx = egui::Context::default();
     ctx.memory().options.tessellation_options.anti_alias = anti_alias;
 
     let raw_input = egui::RawInput::default();
     let mut demo_windows = egui_demo_lib::DemoWindows::default();
-    let (output, shapes) = ctx.run(raw_input, |ctx| demo_windows.ui(ctx));
-    let clipped_meshes = ctx.tessellate(shapes);
-    (output, clipped_meshes)
+    let output = ctx.run(raw_input, |ctx| demo_windows.ui(ctx));
+    let clipped_meshes = ctx.tessellate(output.shapes);
+    (output.platform_output, clipped_meshes)
 }
 
-fn example_shapes() -> (egui::Output, Vec<epaint::ClippedShape>) {
-    let mut ctx = egui::CtxRef::default();
+fn example_shapes() -> (egui::PlatformOutput, Vec<epaint::ClippedShape>) {
+    let mut ctx = egui::Context::default();
     let raw_input = egui::RawInput::default();
     let mut demo_windows = egui_demo_lib::DemoWindows::default();
-    ctx.run(raw_input, |ctx| demo_windows.ui(ctx))
+    let output = ctx.run(raw_input, |ctx| demo_windows.ui(ctx));
+    (output.platform_output, output.shapes)
 }
 
 fn bincode<S: ?Sized + serde::Serialize>(data: &S) -> Vec<u8> {
@@ -44,16 +48,18 @@ fn print_encodings<S: ?Sized + serde::Serialize>(data: &S) {
     // println!("zstd-21: {:>6.2} kB (too slow)", zstd_kb(&encoded, 21)); // way too slow
 }
 
-fn print_compressions(clipped_meshes: &[egui::ClippedMesh]) {
+fn print_compressions(clipped_meshes: &[ClippedPrimitive]) {
     let mut num_vertices = 0;
     let mut num_indices = 0;
     let mut bytes_vertices = 0;
     let mut bytes_indices = 0;
-    for egui::ClippedMesh(_rect, mesh) in clipped_meshes {
-        num_vertices += mesh.vertices.len();
-        num_indices += mesh.indices.len();
-        bytes_vertices += mesh.vertices.len() * std::mem::size_of_val(&mesh.vertices[0]);
-        bytes_indices += mesh.indices.len() * std::mem::size_of_val(&mesh.indices[0]);
+    for primitive in clipped_meshes {
+        if let Primitive::Mesh(mesh) = primitive.primitive {
+            num_vertices += mesh.vertices.len();
+            num_indices += mesh.indices.len();
+            bytes_vertices += mesh.vertices.len() * std::mem::size_of_val(&mesh.vertices[0]);
+            bytes_indices += mesh.indices.len() * std::mem::size_of_val(&mesh.indices[0]);
+        }
     }
     let mesh_bytes = bytes_indices + bytes_vertices;
     println!(
@@ -70,7 +76,13 @@ fn print_compressions(clipped_meshes: &[egui::ClippedMesh]) {
 
     let net_meshes: Vec<_> = clipped_meshes
         .iter()
-        .map(|egui::ClippedMesh(rect, mesh)| (*rect, eterm::net_shape::NetMesh::from(mesh)))
+        .map(|prim| {
+            if let Primitive::Mesh(mesh) = prim {
+                Some((prim.clip_rect, eterm::net_shape::NetMesh::from(*mesh)))
+            } else {
+                None
+            }
+        })
         .collect();
 
     let mut quantized_meshes = net_meshes.clone();
