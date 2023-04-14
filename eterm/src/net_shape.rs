@@ -77,7 +77,7 @@ fn to_net_shapes(
         return;
     }
 
-    match in_shape {        
+    match in_shape {
         egui::Shape::Vec(shapes) => {
             for shape in shapes {
                 to_net_shapes(clip_rect, shape, out_net_shapes);
@@ -142,7 +142,7 @@ fn to_net_shapes(
             }
         }
         egui::Shape::QuadraticBezier(_)
-        | egui::Shape::Noop 
+        | egui::Shape::Noop
         | egui::Shape::CubicBezier(_)
         | egui::Shape::Callback(_) => {}
     }
