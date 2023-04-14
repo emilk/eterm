@@ -4,7 +4,7 @@ use std::sync::{
     Arc,
 };
 
-use egui::{text::Fonts, util::History, RawInput};
+use egui::{util::History, RawInput};
 use parking_lot::Mutex;
 
 use crate::{ClientToServerMessage, EguiFrame, ServerToClientMessage, TcpEndpoint};
@@ -16,8 +16,6 @@ pub struct Client {
     outgoing_msg_tx: mpsc::Sender<ClientToServerMessage>,
     incoming_msg_rx: mpsc::Receiver<ServerToClientMessage>,
 
-    font_definitions: egui::FontDefinitions,
-    fonts: Option<Fonts>,
     latest_frame: Option<EguiFrame>,
 
     bandwidth_history: Arc<Mutex<History<f32>>>,
@@ -53,8 +51,6 @@ impl Client {
             alive: alive.clone(),
             outgoing_msg_tx,
             incoming_msg_rx,
-            font_definitions: Default::default(),
-            fonts: None,
             latest_frame: Default::default(),
             bandwidth_history: bandwidth_history.clone(),
             frame_size_history: frame_size_history.clone(),
@@ -138,44 +134,30 @@ impl Client {
     /// Retrieved new events, and gives back what to do.
     ///
     /// Return `None` when there is nothing new.
-    pub fn update(&mut self, pixels_per_point: f32) -> Option<EguiFrame> {
-        if self.fonts.is_none() {
-            self.fonts = Some(Fonts::new(pixels_per_point, self.font_definitions.clone()));
-        }
-        let fonts = self.fonts.as_mut().unwrap();
-        if pixels_per_point != fonts.pixels_per_point() {
-            *fonts = Fonts::new(pixels_per_point, self.font_definitions.clone());
-        }
+    pub fn update(&mut self, egui_ctx: &egui::Context, pixels_per_point: f32) -> Option<EguiFrame> {
+        egui_ctx.fonts(|f| f.begin_frame(pixels_per_point, f.max_texture_side()));
 
         while let Ok(msg) = self.incoming_msg_rx.try_recv() {
             match msg {
                 ServerToClientMessage::Fonts { font_definitions } => {
-                    self.font_definitions = font_definitions;
-                    *fonts = Fonts::new(pixels_per_point, self.font_definitions.clone());
+                    egui_ctx.set_fonts(font_definitions.clone());
                 }
                 ServerToClientMessage::Frame {
                     frame_index,
-                    output,
+                    platform_output,
                     clipped_net_shapes,
                     client_time,
                 } => {
-                    let clipped_shapes =
-                        crate::net_shape::from_clipped_net_shapes(fonts, clipped_net_shapes);
-                    let tesselator_options =
-                        egui::epaint::tessellator::TessellationOptions::from_pixels_per_point(
-                            pixels_per_point,
-                        );
-                    let tex_size = fonts.font_image().size();
-                    let clipped_meshes = egui::epaint::tessellator::tessellate_shapes(
-                        clipped_shapes,
-                        tesselator_options,
-                        tex_size,
-                    );
+                    let clipped_shapes = egui_ctx.fonts(|fonts| {
+                        crate::net_shape::from_clipped_net_shapes(fonts, clipped_net_shapes)
+                    });
+
+                    let clipped_primitives = egui_ctx.tessellate(clipped_shapes);
 
                     let latest_frame = self.latest_frame.get_or_insert_with(EguiFrame::default);
                     latest_frame.frame_index = frame_index;
-                    latest_frame.output.append(output);
-                    latest_frame.clipped_meshes = clipped_meshes;
+                    latest_frame.platform_output.append(platform_output);
+                    latest_frame.clipped_meshes = clipped_primitives;
 
                     if let Some(client_time) = client_time {
                         let rtt = (now() - client_time) as f32;
@@ -187,21 +169,13 @@ impl Client {
             }
         }
 
-        fonts.end_frame(); // make sure to evict galley cache
-
         self.bandwidth_history.lock().flush(now());
         self.frame_size_history.lock().flush(now());
+
         self.latency_history.flush(now());
         self.frame_history.flush(now());
 
         self.latest_frame.take()
-    }
-
-    pub fn font_image(&self) -> Arc<egui::FontImage> {
-        self.fonts
-            .as_ref()
-            .expect("Call update() first")
-            .font_image()
     }
 }
 

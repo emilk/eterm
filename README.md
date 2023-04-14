@@ -23,7 +23,7 @@ let mut eterm_server = eterm::Server::new("0.0.0.0:8505")?;
 …
 
 eterm_server
-    .show(|egui_ctx: &egui::CtxRef, client_id: eterm::ClientId| {
+    .show(|egui_ctx: &egui::Context, client_id: eterm::ClientId| {
         egui::CentralPanel::default().show(egui_ctx, |ui| {
             ui.label("Some important stats");
             ui.checkbox(&mut some_option, "Option enabled");
